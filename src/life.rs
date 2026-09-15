@@ -17,7 +17,6 @@ pub struct Life {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 struct Cell {
     alive: bool,
-    age: u16,
 }
 
 impl Life {
@@ -84,19 +83,12 @@ impl Life {
         self.cells[self.index(x, y)].alive
     }
 
-    /// Returns the age of a live cell; dead cells always have age zero.
-    #[must_use]
-    pub fn age(&self, x: usize, y: usize) -> u16 {
-        self.cells[self.index(x, y)].age
-    }
-
     /// Sets a cell's state for deterministic pattern tests.
     #[cfg(test)]
     pub fn set_alive(&mut self, x: usize, y: usize, alive: bool) {
         let index = self.index(x, y);
         let cell = &mut self.cells[index];
         cell.alive = alive;
-        cell.age = u16::from(alive);
     }
 
     /// Seeds the whole board using a small deterministic random-number
@@ -105,7 +97,6 @@ impl Life {
         let density = density.clamp(0.0, 1.0);
         for cell in &mut self.cells {
             cell.alive = rng.next_unit() < density;
-            cell.age = u16::from(cell.alive);
         }
         self.generation = 0;
         self.last_changed = true;
@@ -118,6 +109,14 @@ impl Life {
         self.cells.iter().filter(|cell| cell.alive).count()
     }
 
+    /// Returns whether an in-bounds cell will be alive in the next generation
+    /// without changing the board.
+    #[must_use]
+    pub(crate) fn will_be_alive_at(&self, x: usize, y: usize) -> bool {
+        let neighbours = self.live_neighbour_count(x, y);
+        neighbours == 3 || (self.cells[self.index(x, y)].alive && neighbours == 2)
+    }
+
     /// Advances the board by one generation, returning whether its layout
     /// changed. Conway's classic B3/S23 rules are applied.
     pub fn tick(&mut self) -> bool {
@@ -126,22 +125,10 @@ impl Life {
 
         for y in 0..self.height {
             for x in 0..self.width {
-                let current = self.cells[self.index(x, y)];
-                let neighbours = self.live_neighbour_count(x, y);
-                let alive = neighbours == 3 || (current.alive && neighbours == 2);
-                change_count += usize::from(alive != current.alive);
-                next.push(Cell {
-                    alive,
-                    age: if alive {
-                        if current.alive {
-                            current.age.saturating_add(1)
-                        } else {
-                            1
-                        }
-                    } else {
-                        0
-                    },
-                });
+                let current_alive = self.cells[self.index(x, y)].alive;
+                let alive = self.will_be_alive_at(x, y);
+                change_count += usize::from(alive != current_alive);
+                next.push(Cell { alive });
             }
         }
 

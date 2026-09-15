@@ -1,9 +1,5 @@
 use crate::life::Life;
 
-const BLOCK: &[(isize, isize)] = &[(0, 0), (1, 0), (0, 1), (1, 1)];
-const BEEHIVE: &[(isize, isize)] = &[(1, 0), (2, 0), (0, 1), (3, 1), (1, 2), (2, 2)];
-const BOAT: &[(isize, isize)] = &[(0, 0), (1, 0), (0, 1), (2, 1), (1, 2)];
-const LOAF: &[(isize, isize)] = &[(1, 0), (2, 0), (0, 1), (3, 1), (1, 2), (3, 2), (2, 3)];
 const BLINKER: &[(isize, isize)] = &[(0, 0), (1, 0), (2, 0)];
 const TOAD: &[(isize, isize)] = &[(1, 0), (2, 0), (3, 0), (0, 1), (1, 1), (2, 1)];
 const BEACON: &[(isize, isize)] = &[
@@ -36,9 +32,11 @@ pub enum ShapeKind {
     Oscillator,
     Glider,
     Spaceship,
+    Unrecognized,
 }
 
-/// Labels the cells belonging to isolated, recognizable Life structures.
+/// Labels every live cell with either a recognized Life structure or a
+/// coherent fallback class for its connected component.
 #[must_use]
 pub fn classify(life: &Life) -> Vec<Option<ShapeKind>> {
     let mut labels = vec![None; life.width() * life.height()];
@@ -54,10 +52,12 @@ pub fn classify(life: &Life) -> Vec<Option<ShapeKind>> {
             }
 
             let component = collect_component(life, &mut visited, x, y);
-            if let Some(shape) = classify_component(&component) {
-                for (index, _) in component {
-                    labels[index] = Some(shape);
-                }
+            let shape = is_still_life(life, &component)
+                .then_some(ShapeKind::StillLife)
+                .or_else(|| classify_component(&component))
+                .unwrap_or(ShapeKind::Unrecognized);
+            for (index, _) in component {
+                labels[index] = Some(shape);
             }
         }
     }
@@ -176,16 +176,42 @@ fn is_isolated_pattern(
     true
 }
 
+/// Returns whether this connected component survives unchanged for one Life
+/// generation. Any birth must be adjacent to a live cell, so checking each
+/// component cell's neighbourhood covers every cell that could change. The
+/// simulation's own next-state rule is used to prevent detector drift.
+fn is_still_life(life: &Life, component: &[(usize, (isize, isize))]) -> bool {
+    for &(index, _) in component {
+        let x = index % life.width();
+        let y = index / life.width();
+        if !life.will_be_alive_at(x, y) {
+            return false;
+        }
+
+        for offset_y in -1..=1 {
+            for offset_x in -1..=1 {
+                if offset_x == 0 && offset_y == 0 {
+                    continue;
+                }
+                let neighbour_x = wrap_coordinate(x, offset_x, life.width());
+                let neighbour_y = wrap_coordinate(y, offset_y, life.height());
+                if !life.is_alive_at(neighbour_x, neighbour_y)
+                    && life.will_be_alive_at(neighbour_x, neighbour_y)
+                {
+                    return false;
+                }
+            }
+        }
+    }
+    true
+}
+
 fn classify_component(component: &[(usize, (isize, isize))]) -> Option<ShapeKind> {
     let points = component
         .iter()
         .map(|(_, point)| *point)
         .collect::<Vec<_>>();
     [
-        (ShapeKind::StillLife, BLOCK),
-        (ShapeKind::StillLife, BEEHIVE),
-        (ShapeKind::StillLife, BOAT),
-        (ShapeKind::StillLife, LOAF),
         (ShapeKind::Oscillator, BLINKER),
         (ShapeKind::Oscillator, TOAD),
         (ShapeKind::Oscillator, BEACON),
@@ -268,6 +294,32 @@ mod tests {
     }
 
     #[test]
+    fn classifies_an_unlisted_still_life() {
+        let cells = [(5, 4), (4, 5), (6, 5), (5, 6)]; // tub
+        let life = board_with(&cells);
+        let labels = classify(&life);
+
+        for (x, y) in cells {
+            let x = usize::try_from(x).expect("test x coordinate is non-negative");
+            let y = usize::try_from(y).expect("test y coordinate is non-negative");
+            assert_eq!(labels[y * life.width() + x], Some(ShapeKind::StillLife));
+        }
+    }
+
+    #[test]
+    fn classifies_a_still_life_across_a_wrapped_edge() {
+        let cells = [(19, 4), (0, 4), (19, 5), (0, 5)];
+        let life = board_with(&cells);
+        let labels = classify(&life);
+
+        for (x, y) in cells {
+            let x = usize::try_from(x).expect("test x coordinate is non-negative");
+            let y = usize::try_from(y).expect("test y coordinate is non-negative");
+            assert_eq!(labels[y * life.width() + x], Some(ShapeKind::StillLife));
+        }
+    }
+
+    #[test]
     fn classifies_an_oscillator() {
         let life = board_with(&[(3, 4), (4, 4), (5, 4)]);
         let labels = classify(&life);
@@ -283,5 +335,18 @@ mod tests {
         let ship = board_with(LIGHTWEIGHT_SPACESHIP);
         let ship_labels = classify(&ship);
         assert_eq!(ship_labels[ship.width()], Some(ShapeKind::Spaceship));
+    }
+
+    #[test]
+    fn labels_every_cell_of_an_unrecognized_component() {
+        let cells = [(4, 4), (5, 4), (6, 4), (4, 5), (5, 5)];
+        let life = board_with(&cells);
+        let labels = classify(&life);
+
+        for (x, y) in cells {
+            let x = usize::try_from(x).expect("test x coordinate is non-negative");
+            let y = usize::try_from(y).expect("test y coordinate is non-negative");
+            assert_eq!(labels[y * life.width() + x], Some(ShapeKind::Unrecognized));
+        }
     }
 }

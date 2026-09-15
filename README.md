@@ -15,12 +15,13 @@ bounded to keep very high-resolution displays responsive; a material resize
 starts a matching new seed. Fullscreen mode hides the pointer and restores it
 when the screensaver exits.
 
-Recognizable, isolated structures use a semantic Catppuccin accent rather than
-an arbitrary cell colour: still lifes are yellow, oscillators green, gliders
-blue, and lightweight spaceships mauve. Everything else keeps a subtle cycling
-accent so the unsolved field remains alive. There is no visual legend, grid, or
-HUD on-screen; the README is deliberately the only place the colour language is
-spelled out.
+Isolated structures use a semantic Catppuccin accent: any connected structure
+that remains unchanged for a generation is a still life and uses Overlay2;
+oscillators are green, gliders blue, and lightweight spaceships mauve.
+Every other connected live cluster shares a smoothly cycling accent drawn from
+the unused Mocha palette colours, so no shape is split across unrelated colours.
+There is no visual legend, grid, or HUD on-screen; the README is deliberately
+the only place the colour language is spelled out.
 
 ## Run
 
