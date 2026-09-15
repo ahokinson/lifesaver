@@ -1,0 +1,19 @@
+[package]
+name = "lifesaver"
+version = "0.1.0"
+edition = "2024"
+description = "A Catppuccin Mocha fullscreen Conway's Game of Life screensaver"
+license = "MIT"
+repository = "https://github.com/ahokinson/lifesaver"
+keywords = ["screensaver", "conway", "game-of-life", "catppuccin"]
+categories = ["games", "graphics"]
+
+[dependencies]
+macroquad = "0.4.14"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
